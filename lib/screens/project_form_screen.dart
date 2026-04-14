@@ -1,20 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:spawner/models/project_config.dart';
-
-const List<String> COMMON_APPS = [
-  'Discord',
-  'Vivaldi',
-  'Slack',
-  'Figma',
-  'Spotify',
-  'Telegram',
-  'Safari',
-  'Google Chrome',
-  'Firefox',
-  'Notion',
-  'Postman',
-];
+import 'package:spawner/services/app_discovery_service.dart';
 
 class ProjectFormScreen extends StatefulWidget {
   final ProjectConfig? existing;
@@ -34,7 +21,10 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   late bool _openIterm;
   late bool _openClaude;
   late Set<String> _selectedApps;
-  late final TextEditingController _customAppController;
+  final AppDiscoveryService _appDiscovery = AppDiscoveryService();
+  List<String> _installedApps = [];
+  bool _appsLoading = true;
+  String _appSearchQuery = '';
 
   bool get _isEditing => widget.existing != null;
 
@@ -49,7 +39,15 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     _openIterm = existing?.openIterm ?? true;
     _openClaude = existing?.openClaude ?? false;
     _selectedApps = Set<String>.from(existing?.additionalApps ?? []);
-    _customAppController = TextEditingController();
+    _loadApps();
+  }
+
+  Future<void> _loadApps() async {
+    final apps = await _appDiscovery.getInstalledApps();
+    setState(() {
+      _installedApps = apps;
+      _appsLoading = false;
+    });
   }
 
   @override
@@ -57,7 +55,6 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     _nameController.dispose();
     _pathController.dispose();
     _vscodeFilesController.dispose();
-    _customAppController.dispose();
     super.dispose();
   }
 
@@ -134,50 +131,58 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
               ]),
               const SizedBox(height: 24),
               _buildSection('Additional Apps', [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: COMMON_APPS.map((app) {
-                    final selected = _selectedApps.contains(app);
-                    return FilterChip(
-                      label: Text(app),
-                      selected: selected,
-                      onSelected: (v) {
-                        setState(() {
-                          if (v) {
-                            _selectedApps.add(app);
-                          } else {
-                            _selectedApps.remove(app);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _customAppController,
-                        decoration: const InputDecoration(
-                          labelText: 'Custom app name',
-                          hintText: 'e.g. TablePlus',
-                          border: OutlineInputBorder(),
-                        ),
+                if (_appsLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else ...[
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Search installed apps',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => setState(() => _appSearchQuery = v),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 200,
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _filteredApps.map((app) {
+                          final selected = _selectedApps.contains(app);
+                          return FilterChip(
+                            label: Text(app),
+                            selected: selected,
+                            onSelected: (v) {
+                              setState(() {
+                                if (v) {
+                                  _selectedApps.add(app);
+                                } else {
+                                  _selectedApps.remove(app);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(icon: const Icon(Icons.add_circle), onPressed: _addCustomApp),
-                  ],
-                ),
-                if (_selectedApps.difference(COMMON_APPS.toSet()).isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  ),
+                ],
+                if (_selectedApps.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Selected (${_selectedApps.length})',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: _selectedApps
-                        .difference(COMMON_APPS.toSet())
                         .map(
                           (app) => Chip(
                             label: Text(app),
@@ -211,13 +216,10 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     );
   }
 
-  void _addCustomApp() {
-    final name = _customAppController.text.trim();
-    if (name.isEmpty) return;
-    setState(() {
-      _selectedApps.add(name);
-      _customAppController.clear();
-    });
+  List<String> get _filteredApps {
+    if (_appSearchQuery.isEmpty) return _installedApps;
+    final query = _appSearchQuery.toLowerCase();
+    return _installedApps.where((app) => app.toLowerCase().contains(query)).toList();
   }
 
   void _save() {
