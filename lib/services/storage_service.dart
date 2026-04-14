@@ -1,31 +1,34 @@
-import 'dart:convert';
-import 'dart:io';
+import 'package:hive_flutter/hive_flutter.dart';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:spawner/models/project_config.dart';
 
 class StorageService {
-  static const _FILE_NAME = 'spawner_projects.json';
+  static const _BOX_NAME = 'projects';
 
-  Future<File> _getFile() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/$_FILE_NAME');
+  Future<void> init() async {
+    await Hive.initFlutter();
+    Hive.registerAdapter(ProjectConfigAdapter());
+    await Hive.openBox<ProjectConfig>(_BOX_NAME);
   }
 
-  Future<List<ProjectConfig>> loadProjects() async {
-    final file = await _getFile();
-    if (!await file.exists()) return [];
+  Box<ProjectConfig> get _box => Hive.box<ProjectConfig>(_BOX_NAME);
 
-    final content = await file.readAsString();
-    if (content.isEmpty) return [];
+  List<ProjectConfig> loadProjects() {
+    return _box.values.toList();
+  }
 
-    final List<dynamic> jsonList = jsonDecode(content) as List<dynamic>;
-    return jsonList.map((e) => ProjectConfig.fromJson(e as Map<String, dynamic>)).toList();
+  Future<void> saveProject(ProjectConfig project) async {
+    await _box.put(project.id, project);
+  }
+
+  Future<void> deleteProject(String id) async {
+    await _box.delete(id);
   }
 
   Future<void> saveProjects(List<ProjectConfig> projects) async {
-    final file = await _getFile();
-    final jsonList = projects.map((p) => p.toJson()).toList();
-    await file.writeAsString(jsonEncode(jsonList));
+    await _box.clear();
+    for (final project in projects) {
+      await _box.put(project.id, project);
+    }
   }
 }

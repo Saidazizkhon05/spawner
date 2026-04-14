@@ -39,27 +39,19 @@ class ProjectsCubit extends Cubit<ProjectsState> {
     return [];
   }
 
-  Future<void> load() async {
-    final projects = await _storage.loadProjects();
+  void load() {
+    final projects = _storage.loadProjects();
     emit(ProjectsLoaded(projects));
   }
 
   Future<void> save(ProjectConfig project) async {
-    final projects = List<ProjectConfig>.from(_currentProjects);
-    final index = projects.indexWhere((p) => p.id == project.id);
-    if (index >= 0) {
-      projects[index] = project;
-    } else {
-      projects.add(project);
-    }
-    await _storage.saveProjects(projects);
-    emit(ProjectsLoaded(projects));
+    await _storage.saveProject(project);
+    emit(ProjectsLoaded(_storage.loadProjects()));
   }
 
   Future<void> delete(String id) async {
-    final projects = _currentProjects.where((p) => p.id != id).toList();
-    await _storage.saveProjects(projects);
-    emit(ProjectsLoaded(projects));
+    await _storage.deleteProject(id);
+    emit(ProjectsLoaded(_storage.loadProjects()));
   }
 
   Future<void> launch(ProjectConfig project) async {

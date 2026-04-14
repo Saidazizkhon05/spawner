@@ -1,4 +1,6 @@
-class ProjectConfig {
+import 'package:hive/hive.dart';
+
+class ProjectConfig extends HiveObject {
   final String id;
   final String name;
   final String projectPath;
@@ -8,7 +10,7 @@ class ProjectConfig {
   final bool openClaude;
   final List<String> additionalApps;
 
-  const ProjectConfig({
+  ProjectConfig({
     required this.id,
     required this.name,
     required this.projectPath,
@@ -40,31 +42,38 @@ class ProjectConfig {
       additionalApps: additionalApps ?? this.additionalApps,
     );
   }
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'projectPath': projectPath,
-      'openVscode': openVscode,
-      'vscodeFiles': vscodeFiles,
-      'openIterm': openIterm,
-      'openClaude': openClaude,
-      'additionalApps': additionalApps,
-    };
+class ProjectConfigAdapter extends TypeAdapter<ProjectConfig> {
+  @override
+  final int typeId = 0;
+
+  @override
+  ProjectConfig read(BinaryReader reader) {
+    final fields = reader.readMap().cast<String, dynamic>();
+    return ProjectConfig(
+      id: fields['id'] as String,
+      name: fields['name'] as String,
+      projectPath: fields['projectPath'] as String,
+      openVscode: fields['openVscode'] as bool? ?? true,
+      vscodeFiles: (fields['vscodeFiles'] as List?)?.cast<String>() ?? [],
+      openIterm: fields['openIterm'] as bool? ?? true,
+      openClaude: fields['openClaude'] as bool? ?? false,
+      additionalApps: (fields['additionalApps'] as List?)?.cast<String>() ?? [],
+    );
   }
 
-  factory ProjectConfig.fromJson(Map<String, dynamic> json) {
-    return ProjectConfig(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      projectPath: json['projectPath'] as String,
-      openVscode: json['openVscode'] as bool? ?? true,
-      vscodeFiles: (json['vscodeFiles'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
-      openIterm: json['openIterm'] as bool? ?? true,
-      openClaude: json['openClaude'] as bool? ?? false,
-      additionalApps:
-          (json['additionalApps'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
-    );
+  @override
+  void write(BinaryWriter writer, ProjectConfig obj) {
+    writer.writeMap({
+      'id': obj.id,
+      'name': obj.name,
+      'projectPath': obj.projectPath,
+      'openVscode': obj.openVscode,
+      'vscodeFiles': obj.vscodeFiles,
+      'openIterm': obj.openIterm,
+      'openClaude': obj.openClaude,
+      'additionalApps': obj.additionalApps,
+    });
   }
 }

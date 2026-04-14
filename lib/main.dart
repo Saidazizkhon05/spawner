@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:spawner/app.dart';
+import 'package:spawner/services/storage_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SpawnerApp());
+  final storage = StorageService();
+  await storage.init();
+  runApp(SpawnerApp(storage: storage));
 }
