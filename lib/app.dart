@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:spawner/models/project_config.dart';
+import 'package:spawner/cubits/projects_cubit.dart';
 import 'package:spawner/screens/home_screen.dart';
+import 'package:spawner/services/launcher_service.dart';
 import 'package:spawner/services/storage_service.dart';
 import 'package:spawner/services/tray_service.dart';
+import 'package:spawner/theme/spawner_theme.dart';
 
 class SpawnerApp extends StatefulWidget {
   const SpawnerApp({super.key});
@@ -13,70 +16,52 @@ class SpawnerApp extends StatefulWidget {
 }
 
 class _SpawnerAppState extends State<SpawnerApp> {
-  final StorageService _storage = StorageService();
-  final TrayService _tray = TrayService();
-  List<ProjectConfig> _projects = [];
-  bool _isLoading = true;
+  final _storage = StorageService();
+  final _launcher = LauncherService();
+  final _tray = TrayService();
+  late final ProjectsCubit _projectsCubit;
 
   @override
   void initState() {
     super.initState();
+    _projectsCubit = ProjectsCubit(storage: _storage, launcher: _launcher);
     _init();
   }
 
   Future<void> _init() async {
     await _tray.init();
-    _tray.onShowWindow = _showWindow;
-    _projects = await _storage.loadProjects();
-    await _tray.updateMenu(_projects);
-    setState(() => _isLoading = false);
-  }
+    await _projectsCubit.load();
 
-  void _showWindow() {
-    // The window is managed by the macOS native layer.
-    // This triggers a re-show via NSApplication.
-    WidgetsBinding.instance.platformDispatcher;
-  }
-
-  Future<void> _saveProject(ProjectConfig project) async {
-    setState(() {
-      final index = _projects.indexWhere((p) => p.id == project.id);
-      if (index >= 0) {
-        _projects[index] = project;
-      } else {
-        _projects.add(project);
+    // Keep tray menu in sync with projects
+    _projectsCubit.stream.listen((state) {
+      if (state is ProjectsLoaded) {
+        _tray.updateMenu(state.projects);
       }
     });
-    await _storage.saveProjects(_projects);
-    await _tray.updateMenu(_projects);
+
+    // Also update tray with initial data
+    final state = _projectsCubit.state;
+    if (state is ProjectsLoaded) {
+      await _tray.updateMenu(state.projects);
+    }
   }
 
-  Future<void> _deleteProject(ProjectConfig project) async {
-    setState(() {
-      _projects.removeWhere((p) => p.id == project.id);
-    });
-    await _storage.saveProjects(_projects);
-    await _tray.updateMenu(_projects);
+  @override
+  void dispose() {
+    _projectsCubit.close();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Spawner',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        useMaterial3: true,
-        brightness: Brightness.light,
+    return BlocProvider.value(
+      value: _projectsCubit,
+      child: MaterialApp(
+        title: 'Spawner',
+        debugShowCheckedModeBanner: false,
+        theme: SpawnerTheme.dark,
+        home: const HomeScreen(),
       ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        useMaterial3: true,
-        brightness: Brightness.dark,
-      ),
-      home: _isLoading
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : HomeScreen(projects: _projects, onSave: _saveProject, onDelete: _deleteProject),
     );
   }
 }
